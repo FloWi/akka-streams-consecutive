@@ -7,15 +7,18 @@ import akka.stream.scaladsl._
 import scala.concurrent._
 import scala.concurrent.duration._
 
-object Hello extends App {
+object ConsecutiveStreamApp extends App {
 
-  implicit val system: ActorSystem = ActorSystem("QuickStart")
+  implicit val system: ActorSystem = ActorSystem("ConsecutiveStreamApp")
 
-  sealed trait MyProduct
-  case class LocalizedProduct(id: Int, name: String) extends MyProduct
+  sealed trait MyProduct {
+    def id: Int
+  }
+  case class LocalizedProduct(id: Int, name: String) extends MyProduct {
+    def toMd: String = s"| $id | $name |"
+
+  }
   case class EmptyProduct(id: Int) extends MyProduct
-
-  case class Meta[T](t: Option[T], idxDiff: Long)
 
   def toConsecutiveStream(
       minId: Int,
@@ -76,10 +79,10 @@ object Hello extends App {
   }
 
   val deProducts = List(1, 2, 5, 8, 9, 10, 12).map(id =>
-    LocalizedProduct(id, s"Deutsches Produkt mit id ${id}")
+    LocalizedProduct(id, s"Deutsches Produkt mit id $id")
   )
   val enProducts = List(2, 4, 8, 9, 11).map(id =>
-    LocalizedProduct(id, s"English Product with id ${id}")
+    LocalizedProduct(id, s"English Product with id $id")
   )
 
   val maxId = Math.max(deProducts.maxBy(_.id).id, enProducts.maxBy(_.id).id)
@@ -88,13 +91,41 @@ object Hello extends App {
   val enSource = Source(enProducts).via(toConsecutiveStream(minId, maxId))
   val deSource = Source(deProducts).via(toConsecutiveStream(minId, maxId))
 
-  val res = Await.result(
+  val zipped = Await.result(
     deSource
       .zip(enSource)
       .runWith(Sink.seq),
     5.seconds
   )
-  res.foreach(println)
+
+  println("## deProducts")
+  println("| id | name |")
+  println("| -------: | ------- |")
+  deProducts.foreach(p => println(p.toMd))
+
+  println("## enProducts")
+  println("| id | name |")
+  println("| -------: | ------- |")
+  enProducts.foreach(p => println(p.toMd))
+
+  println("## zipped")
+  println("| de id | de product | en id| en product")
+  println("| -------: | ------- | ------- | ------- |")
+
+  zipped.foreach { case (de, en) =>
+    val deName = de match {
+      case LocalizedProduct(_, name) => name
+      case EmptyProduct(_)           => "---"
+    }
+
+    val enName = en match {
+      case LocalizedProduct(_, name) => name
+      case EmptyProduct(_)           => "---"
+    }
+
+    println(s"| ${de.id} | $deName | ${en.id} | $enName |")
+
+  }
 
   Await.ready(system.terminate, 5.seconds)
 
