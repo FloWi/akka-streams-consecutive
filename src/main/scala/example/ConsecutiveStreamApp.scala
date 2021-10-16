@@ -91,9 +91,22 @@ object ConsecutiveStreamApp extends App {
   val enSource = Source(enProducts).via(toConsecutiveStream(minId, maxId))
   val deSource = Source(deProducts).via(toConsecutiveStream(minId, maxId))
 
+  val zippedSource = deSource
+    .zip(enSource)
+
+  val cleanedUpSource = zippedSource.filterNot {
+    case (EmptyProduct(_), EmptyProduct(_)) => true
+    case _                                  => false
+  }
+
   val zipped = Await.result(
-    deSource
-      .zip(enSource)
+    zippedSource
+      .runWith(Sink.seq),
+    5.seconds
+  )
+
+  val cleaned = Await.result(
+    cleanedUpSource
       .runWith(Sink.seq),
     5.seconds
   )
@@ -109,21 +122,29 @@ object ConsecutiveStreamApp extends App {
   enProducts.foreach(p => println(p.toMd))
 
   println("## zipped")
-  println("| de id | de product | en id| en product")
-  println("| -------: | ------- | ------- | ------- |")
+  displayZippedCatalog(zipped)
 
-  zipped.foreach { case (de, en) =>
-    val deName = de match {
-      case LocalizedProduct(_, name) => name
-      case EmptyProduct(_)           => "---"
+  println("## cleaned up (empty elements removed)")
+  displayZippedCatalog(cleaned)
+
+  def displayZippedCatalog(products: Seq[(MyProduct, MyProduct)]) = {
+    println("| de id | de product | en id| en product")
+    println("| -------: | ------- | ------- | ------- |")
+
+    products.foreach { case (de, en) =>
+      val deName = de match {
+        case LocalizedProduct(_, name) => name
+        case EmptyProduct(_)           => "---"
+      }
+
+      val enName = en match {
+        case LocalizedProduct(_, name) => name
+        case EmptyProduct(_)           => "---"
+      }
+
+      println(s"| ${de.id} | $deName | ${en.id} | $enName |")
+
     }
-
-    val enName = en match {
-      case LocalizedProduct(_, name) => name
-      case EmptyProduct(_)           => "---"
-    }
-
-    println(s"| ${de.id} | $deName | ${en.id} | $enName |")
 
   }
 
