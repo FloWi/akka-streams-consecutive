@@ -9,7 +9,7 @@ val AkkaVersion = "2.6.16"
 
 lazy val root = (project in file("."))
   .settings(
-    name := "akka-streams-merge",
+    name := "akka-streams-consecutive",
     libraryDependencies += scalaTest % Test,
     libraryDependencies += "com.typesafe.akka" %% "akka-stream" % AkkaVersion
   )
